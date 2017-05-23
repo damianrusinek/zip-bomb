@@ -68,14 +68,18 @@ def get_files_depth_and_size(total_size):
 	file_size = 10
 	actual_size = files_nb**files_nb * file_size
 	while actual_size < total_size:
+		# depth
 		inc_files_nb = files_nb + 1
 		if inc_files_nb**inc_files_nb * file_size < total_size:
 			files_nb = inc_files_nb
-			
-		if files_nb**files_nb * 2 * file_size < total_size:
+		# file size
+		new_file_size = total_size / (files_nb**files_nb)
+		if new_file_size > 2 * file_size:
 			file_size *= 2
+		elif new_file_size == file_size:
+			file_size += 1
 		else:
-			file_size = max(total_size / (2 * files_nb), file_size)	
+			file_size = new_file_size
 		actual_size = files_nb**files_nb * file_size
 	return files_nb, file_size
 		
@@ -124,7 +128,7 @@ if __name__ == '__main__':
 	
 	if len(sys.argv) < 4:
 		usage()
-		
+	
 	mode = sys.argv[1]
 	size_MB = int(sys.argv[2])
 	out_zip_file = sys.argv[3]
