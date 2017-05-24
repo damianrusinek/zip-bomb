@@ -14,8 +14,7 @@ def generate_dummy_file(filename, size):
 		dummy.write((size*1024*1024)*'0')
 
 	
-def make_copies_and_compress(infile, outfile, n_copies):
-	zf = zipfile.ZipFile(outfile, mode='w', allowZip64= True)
+def make_copies_and_compress(zf, infile, n_copies):
 	for i in range(n_copies):
 		extension = infile[infile.rfind('.')+1:]
 		basename = infile[:infile.rfind('.')]
@@ -23,7 +22,6 @@ def make_copies_and_compress(infile, outfile, n_copies):
 		shutil.copy(infile,f_name)
 		zf.write(f_name, compress_type=zipfile.ZIP_DEFLATED)
 		os.remove(f_name)
-	zf.close()
 	
 	
 def add_file_to_zip(zf, path, include_dir=True):
@@ -122,23 +120,25 @@ def make_zip_nested(size_MB, out_zip_file, include_dirs, include_files):
 	actual_size = depth**depth*file_size 
 	print('Warning: Using nested mode. Actual size may differ from given.')
 	
+	# Prototype zip file
 	dummy_name = 'dummy.txt'
 	generate_dummy_file(dummy_name, file_size)
-	zf = zipfile.ZipFile('1.zip', mode='w', allowZip64= True)
+	zf = zipfile.ZipFile('1.zip', mode='w', allowZip64=True)
 	zf.write(dummy_name, compress_type=zipfile.ZIP_DEFLATED)
-	
-	# Include selected dirs
-	for f in include_dirs:
-		add_file_to_zip(zf, f, include_dir=False)
-	for f in include_files:
-		add_file_to_zip(zf, f)
-	
 	zf.close()
 	os.remove(dummy_name)
 	
 	for i in range(1,depth+1):
-		make_copies_and_compress('%d.zip'%i,'%d.zip'%(i+1),depth)
+		zf = zipfile.ZipFile('%d.zip'%(i+1), mode='w', allowZip64=True)
+		make_copies_and_compress(zf, '%d.zip'%i,depth)
 		os.remove('%d.zip'%i)
+		if i == depth:
+			# Include selected dirs
+			for f in include_dirs:
+				add_file_to_zip(zf, f, include_dir=False)
+			for f in include_files:
+				add_file_to_zip(zf, f)	
+		zf.close()
 	if os.path.isfile(out_zip_file):
 		os.remove(out_zip_file)
 	os.rename('%d.zip'%(depth+1),out_zip_file)
