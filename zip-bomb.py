@@ -11,7 +11,7 @@ import argparse
 	
 def generate_dummy_file(filename, size):
 	with open(filename,'w') as dummy:
-		dummy.write((size*1024*1024)*'0')
+		dummy.write((size*1024*1024*1024*1024*1024*1024*1024*1024)*'0')
 
 	
 def make_copies_and_compress(zf, infile, n_copies):
