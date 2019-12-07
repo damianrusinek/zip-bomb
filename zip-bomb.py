@@ -167,8 +167,8 @@ if __name__ == '__main__':
 	
 	out_zip_file = args.out_zip_file
 	
-	include_dirs = [d.strip() for d in args.dirs.strip().split(',') if d is not '']
-	include_files = [d.strip() for d in args.files.strip().split(',') if d is not '']
+	include_dirs = [d.strip() for d in args.dirs.strip().split(',') if d = ! '']
+	include_files = [d.strip() for d in args.files.strip().split(',') if d = ! '']
 	
 	start_time = time.time()
 	if args.mode == 'flat':
