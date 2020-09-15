@@ -151,8 +151,14 @@ def help_epilog():
   nested - nested zip file, zip of zips of zips ... (much smaller) """
 
 
-if __name__ == '__main__':
+def check_size(value):
+    ivalue = int(value)
+    if ivalue < 100:
+        raise argparse.ArgumentTypeError("%s is an invalid value (< 100)." % value)
+    return ivalue
 
+
+def parser():
 	parser = argparse.ArgumentParser(description='Creates ZIP bomb archive.',
 				formatter_class=argparse.RawDescriptionHelpFormatter, epilog=help_epilog())
 	parser.add_argument('-d', '--dirs', action='store',
@@ -160,10 +166,15 @@ if __name__ == '__main__':
 	parser.add_argument('-f', '--files', action='store',
 		help='add files (can be directory) to ZIP file. multiple files separated with comma', default='')
 	parser.add_argument('mode', help='mode of compression. see choices description below', choices=('flat', 'nested'))
-	parser.add_argument('size', help='decompression size in MB', type=int)
+	parser.add_argument('size', help='decompression size in MB', type=check_size)
 	parser.add_argument('out_zip_file', help='path to destination file')
 
-	args = parser.parse_args()
+	return parser.parse_args()
+
+
+if __name__ == '__main__':
+
+	args = parser()
 
 	out_zip_file = args.out_zip_file
 
